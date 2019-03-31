@@ -1,0 +1,63 @@
+node:
+  id: local-id
+  cluster: local-cluster
+static_resources:
+  listeners:
+  - address:
+      socket_address:
+        address: 0.0.0.0
+        port_value: 8443
+    filter_chains:
+    - tls_context:
+        common_tls_context:
+          tls_certificates:
+          - certificate_chain:
+              filename: config/tls.crt
+            private_key:
+              filename: config/tls.key
+      filters:
+      - name: envoy.http_connection_manager
+        config:
+          codec_type: auto
+          stat_prefix: ingress_http
+          use_remote_address: true
+          access_log:
+          - name: envoy.file_access_log
+            config:
+              path: /dev/stdout
+          rds:
+            route_config_name: escort-routes
+            config_source:
+              api_config_source:
+                api_type: GRPC
+                grpc_services:
+                  envoy_grpc:
+                    cluster_name: xds-cluster
+          http_filters:
+          - name: envoy.ext_authz
+            config:
+              grpc_service:
+                envoy_grpc:
+                  cluster_name: xds-cluster
+          - name: envoy.router
+            config: {}
+  clusters:
+  - name: xds-cluster
+    connect_timeout: 0.25s
+    type: STATIC
+    lb_policy: ROUND_ROBIN
+    http2_protocol_options: {}
+    hosts: [{ socket_address: { address: 127.0.0.1, port_value: 5333 }}]
+dynamic_resources:
+  cds_config:
+    api_config_source:
+      api_type: GRPC
+      grpc_services:
+        envoy_grpc:
+          cluster_name: xds-cluster
+admin:
+  access_log_path: /dev/null
+  address:
+    socket_address:
+      address: 0.0.0.0
+      port_value: 8001
